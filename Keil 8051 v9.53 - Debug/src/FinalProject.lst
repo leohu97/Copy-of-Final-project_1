@@ -1,0 +1,593 @@
+C51 COMPILER V9.53.0.0   FINALPROJECT                                                      05/08/2017 21:43:30 PAGE 1   
+
+
+C51 COMPILER V9.53.0.0, COMPILATION OF MODULE FINALPROJECT
+OBJECT MODULE PLACED IN .\src/FinalProject.OBJ
+COMPILER INVOKED BY: Z:\Applications\Simplicity Studio.app\Contents\Eclipse\developer\toolchains\keil_8051\9.53\BIN\C51.
+                    -exe /Users/liaohu/SimplicityStudio/v4_workspace/Copy of Final project_1/src/FinalProject.c OMF2 SMALL DEBUG OBJECTEXTEND
+                    - ROM(LARGE) WARNINGLEVEL(2) FLOATFUZZY(3) OPTIMIZE(8,SPEED) DEFINE(DEBUG=1) INTVECTOR(0X0000) INTPROMOTE INCDIR(/Users/l
+                    -iaohu/SimplicityStudio/v4_workspace/Copy of Final project_1/inc/graphics;/Users/liaohu/SimplicityStudio/v4_workspace/Cop
+                    -y of Final project_1/inc;/Users/liaohu/SimplicityStudio/v4_workspace/Copy of Final project_1/inc/config;/Applications/Si
+                    -mplicity Studio.app/Contents/Eclipse/developer/sdks/8051/v4.0.3//kits/common/bsp;/Applications/Simplicity Studio.app/Con
+                    -tents/Eclipse/developer/sdks/8051/v4.0.3//kits/EFM8BB3_SLSTK2022A/config;/Applications/Simplicity Studio.app/Contents/Ec
+                    -lipse/developer/sdks/8051/v4.0.3//Device/EFM8BB3/peripheral_driver/inc;/Applications/Simplicity Studio.app/Contents/Ecli
+                    -pse/developer/sdks/8051/v4.0.3//kits/common/drivers/efm8_joystick;/Applications/Simplicity Studio.app/Contents/Eclipse/d
+                    -eveloper/sdks/8051/v4.0.3//kits/common/drivers/efm8_memory_lcd/inc;/Applications/Simplicity Studio.app/Contents/Eclipse/
+                    -developer/sdks/8051/v4.0.3//kits/common/drivers/efm8_memory_lcd/inc/graphics;/Applications/Simplicity Studio.app/Content
+                    -s/Eclipse/developer/sdks/8051/v4.0.3//kits/common/drivers/efm8_memory_lcd/inc/config;/Applications/Simplicity Studio.app
+                    -/Contents/Eclipse/developer/sdks/8051/v4.0.3//Device/shared/si8051base;/Applications/Simplicity Studio.app/Contents/Ecli
+                    -pse/developer/sdks/8051/v4.0.3//Device/EFM8BB3/inc;/Applications/Simplicity Studio.app/Contents/Eclipse/developer/sdks/8
+                    -051/v4.0.3//kits/common/drivers/efm8_retargetserial) PRINT(.\src/FinalProject.lst) COND PAGEWIDTH(120) PAGELENGTH(65) OB
+                    -JECT(.\src/FinalProject.OBJ)
+
+line level    source
+
+   1          ///////////////////////////////////////////////////////////////////////////////
+   2          // Includes
+   3          ///////////////////////////////////////////////////////////////////////////////
+   4          #include "adc.h"
+   5          #include "bsp.h"
+   6          #include "tick.h"
+   7          #include "disp.h"
+   8          #include "render.h"
+   9          #include "joystick.h"
+  10          #include "thinfont.h"
+  11          #include "function_generator.h"
+  12          #include "sine.h"
+  13          #include "square.h"
+  14          #include "triangle.h"
+  15          #include "sawtooth.h"
+  16          #include "windowed_sine.h"
+  17          #include "nav_up.h"
+  18          #include "nav_down.h"
+  19          #include "nav_left.h"
+  20          #include "nav_right.h"
+  21          #include "waveform_tables.h"
+  22          #include "retargetserial.h"
+  23          #include <string.h>
+  24          #include <stdlib.h>
+  25          #include <stdio.h>
+  26          
+  27          
+  28          #define txtlen 5
+  29          ///////////////////////////////////////////////////////////////////////////////
+  30          // Globals
+  31          ///////////////////////////////////////////////////////////////////////////////
+  32          SI_SBIT(LED1, SFR_P1, 4);
+  33          SI_SBIT(LED2, SFR_P1, 5);
+  34          SI_SBIT(LED3, SFR_P1, 6);
+  35          SI_SBIT(BTR, SFR_P0, 2);
+  36          SI_SBIT(BTL, SFR_P0, 3);
+  37          bool JN, JS;
+  38          uint8_t i;
+  39          uint8_t z;
+  40          uint8_t j;
+  41          uint8_t flag;
+C51 COMPILER V9.53.0.0   FINALPROJECT                                                      05/08/2017 21:43:30 PAGE 2   
+
+  42          uint8_t ori;
+  43          uint8_t dir;
+  44          uint8_t len;
+  45          uint8_t xdata ii, ij;
+  46          char xdata text1[txtlen+1];
+  47          char xdata input1[200][txtlen+1];
+  48          char outword[33];
+  49          unsigned char inputchar;      // Used to store character from UART
+  50          uint8_t x=0;
+  51          uint8_t y=0;
+  52          uint8_t page=0;
+  53          int itrp=0;
+  54          // Generic line buffer
+  55          SI_SEGMENT_VARIABLE(Line[DISP_BUF_SIZE], uint8_t, RENDER_LINE_SEG);
+  56          
+  57          // Demo state variables
+  58          //static DemoState currentDemoState = DEMO_SINE;
+  59          //static SI_VARIABLE_SEGMENT_POINTER(currentTable, uint16_t, const SI_SEG_CODE) = sineTable; // current wa
+             -veform table for DAC output
+  60          //static SI_VARIABLE_SEGMENT_POINTER(currentWaveform, uint8_t, const SI_SEG_CODE) = sine_bits; // current 
+             -waveform picture
+  61          
+  62          // Frequency selection
+  63          //#define SUPPORTED_NUM_FREQ 8
+  64          //static SI_SEGMENT_VARIABLE(frequency[SUPPORTED_NUM_FREQ], uint16_t, SI_SEG_XDATA) = {
+  65          //              10L,
+  66          //              20L,
+  67          //              50L,
+  68          //              100L,
+  69          //              200L,
+  70          //              500L,
+  71          //              1000L,
+  72          //              2000L
+  73          //};
+  74          
+  75          //// Current Frequency Selection
+  76          //static uint8_t currentFreqIndex = 3;
+  77          //
+  78          //// Phase offset (updated when frequency is changed)
+  79          //static uint16_t phaseOffset = 100 * PHASE_PRECISION / SAMPLE_RATE_DAC;
+  80          //
+  81          //// Kill splash
+  82          //KillSpash killSplashFlag = SHOW_SPLASH;
+  83          
+  84          ///////////////////////////////////////////////////////////////////////////////
+  85          // Supporting Functions
+  86          ///////////////////////////////////////////////////////////////////////////////
+  87          
+  88          //-----------------------------------------------------------------------------
+  89          // transitionDemoWaveform
+  90          //-----------------------------------------------------------------------------
+  91          //
+  92          // Change function/waveform.
+  93          // Left  - change function order: sine < square < triangle < sawtooth < windowed sine
+  94          // Right - change function order: sine > square > triangle > sawtooth > windowed sine
+  95          //
+  96          // dir - valid arguments are: JOYSTICK_E, JOYSTICK_W
+  97          //
+  98          
+  99          
+ 100          // Must see two or more consecutive joystick presses in the
+ 101          // same direction to qualify as a press.
+ 102          //
+C51 COMPILER V9.53.0.0   FINALPROJECT                                                      05/08/2017 21:43:30 PAGE 3   
+
+ 103          // This helps reduce problems with secondary joystick
+ 104          // position detection as the joystick bounces to a cardinal
+ 105          // direction before returning to center.
+ 106          uint8_t GetJoystickDirection()
+ 107          {
+ 108   1        static uint8_t prevDirection = JOYSTICK_NONE;
+ 109   1        uint8_t curDirection = joystickDirection;
+ 110   1        uint8_t direction = JOYSTICK_NONE;
+ 111   1      
+ 112   1        if (curDirection == prevDirection)
+ 113   1        {
+ 114   2          direction = curDirection;
+ 115   2        }
+ 116   1      
+ 117   1        prevDirection = curDirection;
+ 118   1      
+ 119   1        return direction;
+ 120   1      }
+ 121          
+ 122          // Determines when a Joystick toggle has occurred
+ 123          uint8_t DetectJoystickChange()
+ 124          {
+ 125   1        static uint8_t prevDirection = JOYSTICK_NONE;
+ 126   1        uint8_t curDirection = GetJoystickDirection();
+ 127   1        uint8_t direction = JOYSTICK_NONE;
+ 128   1      
+ 129   1        if (curDirection != prevDirection)
+ 130   1        {
+ 131   2          direction = curDirection;
+ 132   2        }
+ 133   1      
+ 134   1        prevDirection = curDirection;
+ 135   1      
+ 136   1        return direction;
+ 137   1      }
+ 138          
+ 139          static void drawScreenText1(SI_VARIABLE_SEGMENT_POINTER(str, char, RENDER_STR_SEG), uint8_t rowNum, uint8_
+             -t colNum)
+ 140          {
+ 141   1        uint8_t i;
+ 142   1      
+ 143   1        for (i = 0; i < FONT_HEIGHT; i++)
+ 144   1        {
+ 145   2          RENDER_ClrLine(Line);
+ 146   2          RENDER_StrLine(Line, colNum, i, str);
+ 147   2          DISP_WriteLine(rowNum + i, Line);
+ 148   2        }
+ 149   1      }
+ 150          
+ 151          //static void transitionDemoWaveform(uint8_t dir)
+ 152          //{
+ 153          //  if (dir == JOYSTICK_E)
+ 154          //  {
+ 155          //        switch (currentDemoState)
+ 156          //        {
+ 157          //              case DEMO_SINE:
+ 158          //                currentDemoState = DEMO_SQUARE;
+ 159          //                currentWaveform = square_bits;
+ 160          //                currentTable = squareTable;
+ 161          //                break;
+ 162          //
+ 163          //              case DEMO_SQUARE:
+ 164          //                currentDemoState = DEMO_TRIANGLE;
+C51 COMPILER V9.53.0.0   FINALPROJECT                                                      05/08/2017 21:43:30 PAGE 4   
+
+ 165          //                currentWaveform = triangle_bits;
+ 166          //                currentTable = triangleTable;
+ 167          //                break;
+ 168          //
+ 169          //              case DEMO_TRIANGLE:
+ 170          //          currentDemoState = DEMO_SAWTOOTH;
+ 171          //                currentWaveform = sawtooth_bits;
+ 172          //                currentTable = sawtoothTable;
+ 173          //                break;
+ 174          //
+ 175          //              case DEMO_SAWTOOTH:
+ 176          //                currentDemoState = DEMO_WINDOWED_SINE;
+ 177          //                currentWaveform = windowed_sine_bits;
+ 178          //                currentTable = windowedSineTable;
+ 179          //                break;
+ 180          //
+ 181          //              case DEMO_WINDOWED_SINE:
+ 182          //                currentDemoState = DEMO_SINE;
+ 183          //                currentWaveform = sine_bits;
+ 184          //                currentTable = sineTable;
+ 185          //                break;
+ 186          //        }
+ 187          //  }
+ 188          //  else if (dir == JOYSTICK_W)
+ 189          //  {
+ 190          //        switch (currentDemoState)
+ 191          //        {
+ 192          //              case DEMO_SINE:
+ 193          //                currentDemoState = DEMO_WINDOWED_SINE;
+ 194          //                currentWaveform = windowed_sine_bits;
+ 195          //                currentTable = windowedSineTable;
+ 196          //                break;
+ 197          //
+ 198          //              case DEMO_SQUARE:
+ 199          //                currentDemoState = DEMO_SINE;
+ 200          //                currentWaveform = sine_bits;
+ 201          //                currentTable = sineTable;
+ 202          //                break;
+ 203          //
+ 204          //              case DEMO_TRIANGLE:
+ 205          //                currentDemoState = DEMO_SQUARE;
+ 206          //                currentWaveform = square_bits;
+ 207          //                currentTable = squareTable;
+ 208          //                break;
+ 209          //
+ 210          //              case DEMO_SAWTOOTH:
+ 211          //                currentDemoState = DEMO_TRIANGLE;
+ 212          //                currentWaveform = triangle_bits;
+ 213          //                currentTable = triangleTable;
+ 214          //                break;
+ 215          //
+ 216          //              case DEMO_WINDOWED_SINE:
+ 217          //                currentDemoState = DEMO_SAWTOOTH;
+ 218          //                currentWaveform = sawtooth_bits;
+ 219          //                currentTable = sawtoothTable;
+ 220          //                break;
+ 221          //        }
+ 222          //  }
+ 223          //}
+ 224          //
+ 225          ////-----------------------------------------------------------------------------
+ 226          //// transitionDemoFrequency
+ 227          ////-----------------------------------------------------------------------------
+C51 COMPILER V9.53.0.0   FINALPROJECT                                                      05/08/2017 21:43:30 PAGE 5   
+
+ 228          ////
+ 229          //// Change frequency of the function.
+ 230          //// Up   - increase frequency
+ 231          //// Down - decrease frequency
+ 232          ////
+ 233          //// dir - valid arguments are: JOYSTICK_N, JOYSTICK_S
+ 234          ////
+ 235          //static void transitionDemoFrequency(uint8_t dir)
+ 236          //{
+ 237          //  if (dir == JOYSTICK_N)
+ 238          //  {
+ 239          //        // increase freq
+ 240          //        if(currentFreqIndex == SUPPORTED_NUM_FREQ-1)
+ 241          //        {
+ 242          //                currentFreqIndex = 0;
+ 243          //        }
+ 244          //        else
+ 245          //        {
+ 246          //                currentFreqIndex++;
+ 247          //        }
+ 248          //  }
+ 249          //  else if (dir == JOYSTICK_S)
+ 250          //  {
+ 251          //        // decrease freq
+ 252          //        if (currentFreqIndex == 0)
+ 253          //        {
+ 254          //                currentFreqIndex = SUPPORTED_NUM_FREQ-1;
+ 255          //        }
+ 256          //        else
+ 257          //        {
+ 258          //                currentFreqIndex--;
+ 259          //        }
+ 260          //  }
+ 261          //
+ 262          //  phaseOffset = frequency[currentFreqIndex] * PHASE_PRECISION / SAMPLE_RATE_DAC;
+ 263          //}
+ 264          
+ 265          
+ 266          //-----------------------------------------------------------------------------
+ 267          // getJoystick
+ 268          //-----------------------------------------------------------------------------
+ 269          //
+ 270          // Get new ADC sample and return joystick direction. Valid return values:
+ 271          //  JOYSTICK_NONE   JOYSTICK_N   JOYSTICK_S
+ 272          //  JOYSTICK_C      JOYSTICK_E   JOYSTICK_W
+ 273          //
+ 274          static uint8_t getJoystick(void)
+ 275          {
+ 276   1        uint32_t mv;
+ 277   1        uint8_t dir;
+ 278   1      
+ 279   1        ADC0CN0_ADBUSY = 1;
+ 280   1        while (!ADC0CN0_ADINT);
+ 281   1        ADC0CN0_ADINT = 0;
+ 282   1      
+ 283   1        mv = ((uint32_t)ADC0) * 3300 / 1024;
+ 284   1      
+ 285   1        dir = JOYSTICK_convert_mv_to_direction(mv);
+ 286   1      
+ 287   1        return dir;
+ 288   1      }
+ 289          
+ 290          //-----------------------------------------------------------------------------
+C51 COMPILER V9.53.0.0   FINALPROJECT                                                      05/08/2017 21:43:30 PAGE 6   
+
+ 291          // getWaitJoystick
+ 292          //-----------------------------------------------------------------------------
+ 293          //
+ 294          // Get joystick input. If joystick was moved, wait for release. Return joystick
+ 295          // direction. Valid return values:
+ 296          //  JOYSTICK_NONE   JOYSTICK_N   JOYSTICK_S
+ 297          //  JOYSTICK_C      JOYSTICK_E   JOYSTICK_W
+ 298          //
+ 299          static uint8_t getWaitJoystick(void)
+ 300          {
+ 301   1        uint8_t dir, dirSave;
+ 302   1      
+ 303   1        dir = getJoystick();
+ 304   1        dirSave = dir;
+ 305   1      
+ 306   1        // wait for release then transition
+ 307   1        while (dir != JOYSTICK_NONE)
+ 308   1        {
+ 309   2          dir = getJoystick();
+ 310   2        }
+ 311   1      
+ 312   1        return dirSave;
+ 313   1      }
+ 314          
+ 315          //-----------------------------------------------------------------------------
+ 316          // getJoystickDemo
+ 317          //-----------------------------------------------------------------------------
+ 318          //
+ 319          // Get and process joystick input.
+ 320          // Left/Right = change function/waveform
+ 321          // Up/Down    = change frequency
+ 322          //
+ 323          //static void processInput(uint8_t dir)
+ 324          //{
+ 325          //  // process input
+ 326          //  if ((dir == JOYSTICK_E) || (dir == JOYSTICK_W))
+ 327          //  {
+ 328          //    transitionDemoWaveform(dir);
+ 329          //  }
+ 330          //  else if ((dir == JOYSTICK_N) || (dir == JOYSTICK_S))
+ 331          //  {
+ 332          //    transitionDemoFrequency(dir);
+ 333          //  }
+ 334          //}
+ 335          
+ 336          //-----------------------------------------------------------------------------
+ 337          // drawScreenText
+ 338          //-----------------------------------------------------------------------------
+ 339          //
+ 340          // Show one line of text on the screen
+ 341          //
+ 342          // str - pointer to string text (0 - 21 characters) to display
+ 343          // rowNum - row number of the screen (0 - 127)
+ 344          // fontScale - font scaler (1 - 4)
+ 345          //
+ 346          //static void drawScreenText(SI_VARIABLE_SEGMENT_POINTER(str, char, RENDER_STR_SEG), uint8_t rowNum)
+ 347          //{
+ 348          //  uint8_t i;
+ 349          //
+ 350          //  for (i = 0; i < FONT_HEIGHT; i++)
+ 351          //  {
+ 352          //    RENDER_ClrLine(Line);
+ 353          //    RENDER_StrLine(Line, 4, i, str);
+C51 COMPILER V9.53.0.0   FINALPROJECT                                                      05/08/2017 21:43:30 PAGE 7   
+
+ 354          //    DISP_WriteLine(rowNum + i, Line);
+ 355          //  }
+ 356          //}
+ 357          
+ 358          
+ 359          ///////////////////////////////////////////////////////////////////////////////
+ 360          // Interrupt Service Routines
+ 361          ///////////////////////////////////////////////////////////////////////////////
+ 362          
+ 363          //SI_INTERRUPT_USING (TIMER4_ISR, TIMER4_IRQn, 1)
+ 364          //{
+ 365          //  static uint16_t phaseAcc = 0;       // Holds phase accumulator
+ 366          //
+ 367          //  SI_UU16_t temp;   // The temporary value that holds
+ 368          //                                                                        // value before being written
+ 369          //                                                                        // to the DAC
+ 370          //
+ 371          //  TMR4CN0 &= ~TMR3CN0_TF3H__BMASK;    // Clear Timer4 overflow flag
+ 372          //
+ 373          //  phaseAcc += phaseOffset;            // Increment phase accumulator
+ 374          //
+ 375          //  // Read the table value
+ 376          //  temp.u16 = currentTable[phaseAcc >> 8];
+ 377          //
+ 378          //  // Set the value of <temp> to the next output of DAC at full-scale
+ 379          //  // amplitude. The rails are 0x000 and 0xFFF. DAC low byte must be
+ 380          //  // written first.
+ 381          //
+ 382          //  SFRPAGE = PG4_PAGE;
+ 383          //
+ 384          //  DAC1L = DAC0L = temp.u8[LSB];
+ 385          //  DAC1H = DAC0H = temp.u8[MSB];
+ 386          //}
+ 387          //
+ 388          ////-----------------------------------------------------------------------------
+ 389          //// PMATCH_ISR
+ 390          ////-----------------------------------------------------------------------------
+ 391          ////
+ 392          //// The Port Match interrupt occurs whenever (Pn & PnMASK) != (PnMAT & PnMASK).
+ 393          //// We must disable the interrupt and wait until the button is released in
+ 394          //// main, or else the interrupt will trigger multiple times.  It is generally
+ 395          //// not good practice to sit in an ISR for int32_t periods of time.
+ 396          ////
+ 397          
+ 398          void scrollup(void)
+ 399          {
+ 400   1              uint8_t zi;
+ 401   1              //char xdata *p;
+ 402   1              DISP_ClearAll();
+ 403   1              for(zi=0;zi<16;zi++)
+ 404   1                      {
+ 405   2                      strcpy(text1,input1[zi+page*16-16]);
+ 406   2                      drawScreenText1(text1,8*(zi),0);
+ 407   2                      }
+ 408   1      }
+ 409          
+ 410          void scrolldown(void)
+ 411          {
+ 412   1              uint8_t zi;
+ 413   1              for(zi=0;zi<16;zi++)
+ 414   1                      {
+ 415   2                      strcpy(text1,input1[zi+page*16+16]);
+ 416   2                      drawScreenText1(text1,8*(zi),0);
+C51 COMPILER V9.53.0.0   FINALPROJECT                                                      05/08/2017 21:43:30 PAGE 8   
+
+ 417   2                      }
+ 418   1              LED2=1;
+ 419   1      }
+ 420          void paints(void)
+ 421          {
+ 422   1              uint8_t zi;
+ 423   1              for(zi=0;zi<16;zi++)
+ 424   1                      {
+ 425   2                      strcpy(text1,input1[zi+page*16]);
+ 426   2                      drawScreenText1(text1,8*zi,0);
+ 427   2                      }
+ 428   1      }
+ 429          
+ 430          void paintsh(void)
+ 431          {
+ 432   1              uint8_t zi;
+ 433   1              for(zi=0;zi<16;zi++)
+ 434   1                      {
+ 435   2                      strcpy(text1,input1[zi]);
+ 436   2                      len = strlen(text1);
+ 437   2                      if(text1[len-1]=='\n')
+ 438   2                              text1[--len] = '\0';
+ 439   2                              for(z = 0; z<len; z++)
+ 440   2                              {
+ 441   3                              sprintf(outword+z*2, "%02X", text1[z]);
+ 442   3                              drawScreenText1(outword,8*zi,0);
+ 443   3                              }
+ 444   2      
+ 445   2                      }
+ 446   1      
+ 447   1      
+ 448   1      }
+ 449          
+ 450          SI_INTERRUPT (PMATCH_ISR, PMATCH_IRQn) {
+ 451   1              uint8_t SFRPAGE_save = SFRPAGE;
+ 452   1              if (BTL==0) {
+ 453   2                      LED1=0;
+ 454   2              }
+ 455   1              if (BTR==0) {
+ 456   2                      LED1=1;
+ 457   2              }
+ 458   1              SFRPAGE = PG2_PAGE;
+ 459   1      
+ 460   1                //EIE1 &= ~0x02;                     // Disable Port Match interrupts to
+ 461   1                                                   // prevent multiple interrupts from
+ 462   1                                                   // occurring while the button is
+ 463   1                                                   // pressed
+ 464   1                SFRPAGE = SFRPAGE_save;
+ 465   1      
+ 466   1      }
+ 467          ///////////////////////////////////////////////////////////////////////////////
+ 468          // Driver Function
+ 469          ///////////////////////////////////////////////////////////////////////////////
+ 470          
+ 471          
+ 472          
+ 473          void FunctionGenerator_main(void)
+ 474          {
+ 475   1              ii=0;
+ 476   1              ij=0;
+ 477   1              text1[txtlen]=0;
+ 478   1              for(i=0;i<200;i++){
+ 479   2                      for(j=0;j<txtlen+1;j++){
+C51 COMPILER V9.53.0.0   FINALPROJECT                                                      05/08/2017 21:43:30 PAGE 9   
+
+ 480   3                              input1[i][j]=0;
+ 481   3                      }
+ 482   2              }
+ 483   1        while(1)
+ 484   1        {
+ 485   2                dir = getWaitJoystick();
+ 486   2                if (dir == JOYSTICK_N)
+ 487   2                        {
+ 488   3                        LED2=0;
+ 489   3                        scrolldown();
+ 490   3                        }
+ 491   2                        if (dir == JOYSTICK_S)
+ 492   2                        {
+ 493   3                        LED2=1;
+ 494   3                        scrollup();
+ 495   3                        }
+ 496   2                        if(dir==JOYSTICK_C){
+ 497   3                if(LED1==1)
+ 498   3                paints();
+ 499   3                if(LED1==0)
+ 500   3                paintsh();
+ 501   3                inputchar=getchar();
+ 502   3                if(inputchar)
+ 503   3                {
+ 504   4                        if((ii/16)==page)
+ 505   4                        {
+ 506   5                                if(ij<txtlen)
+ 507   5                                {
+ 508   6                                input1[ii][ij]=inputchar;
+ 509   6                                ij++;
+ 510   6                                        if(ij==txtlen)
+ 511   6                                        {
+ 512   7                                        RETARGET_PRINTF ("\n");
+ 513   7                                        ij=0;
+ 514   7                                        ii++;
+ 515   7                                        }
+ 516   6                                }
+ 517   5                                if((ii/16)==(page+1))
+ 518   5                                {
+ 519   6                                        page++;
+ 520   6                                        DISP_ClearAll();
+ 521   6                                }
+ 522   5                        }
+ 523   4      
+ 524   4                }
+ 525   3                        }
+ 526   2      
+ 527   2      
+ 528   2        }
+ 529   1      }
+ 530          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    732    ----
+   CONSTANT SIZE    =   8225    ----
+   XDATA SIZE       =   1224    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     48      11
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      2    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+C51 COMPILER V9.53.0.0   FINALPROJECT                                                      05/08/2017 21:43:30 PAGE 10  
+
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
